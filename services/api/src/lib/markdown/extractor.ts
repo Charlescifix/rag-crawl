@@ -46,7 +46,7 @@ export function extractReadableContent(
 
   return {
     title: article.title ?? "",
-    html: article.content,
+    html: article.content ?? document.body?.innerHTML ?? rawHtml,
     textContent: article.textContent ?? "",
   };
 }
