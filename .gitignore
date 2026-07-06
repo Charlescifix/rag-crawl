@@ -9,3 +9,5 @@ cdk.out/
 __pycache__/
 *.pyc
 .DS_Store
+*.md
+!apps/web/README.md
