@@ -1,11 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "paths": {
-      "@crawler/shared": ["../../packages/shared/src/index.ts"]
-    }
+    "outDir": "dist"
   },
   "include": ["src"]
 }

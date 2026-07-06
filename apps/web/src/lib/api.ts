@@ -180,7 +180,7 @@ export const api = {
         status: 'queued',
         pages: 0,
         chunks: 0,
-        markdownSizeKb: Math.round((s.chunkCount ?? 0) * 350 * 5 / 1024),
+        markdownSizeKb: 0,
         indexedPercent: 0,
         lastCrawledAt: new Date().toISOString(),
         monthlyCostUsd: 0,
