@@ -21,6 +21,7 @@
     "turndown": "^7.2.0"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
     "@types/jsdom": "^21.1.0",
     "@types/node": "^20.0.0",
     "@types/turndown": "^5.0.0",
