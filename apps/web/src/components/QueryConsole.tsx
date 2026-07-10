@@ -1,4 +1,4 @@
-import { AlertCircle, Bot, CornerDownLeft, ExternalLink, Sparkles } from 'lucide-react';
+import { AlertCircle, Bot, CornerDownLeft, ExternalLink, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import type { CrawlStatus, QueryResult } from '../types/domain';
@@ -34,6 +34,12 @@ export function QueryConsole({ siteId, siteName, siteStatus }: Props) {
 
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ask();
+  }
+
+  function clearResult() {
+    setResult(null);
+    setError(null);
+    setQuestion('');
   }
 
   return (
@@ -81,6 +87,12 @@ export function QueryConsole({ siteId, siteName, siteStatus }: Props) {
 
       {result && (
         <div className="answer-card">
+          <div className="answer-card__head">
+            <p className="citations-label answer-card__label">Answer</p>
+            <button className="clear-button" onClick={clearResult} title="Clear the result and reset the console">
+              <X size={14} /> Clear result
+            </button>
+          </div>
           <p className="answer-text">{result.answer}</p>
           {result.citations.length > 0 && (
             <div className="citations">

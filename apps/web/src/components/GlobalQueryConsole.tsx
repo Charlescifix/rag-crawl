@@ -1,4 +1,4 @@
-import { AlertCircle, CornerDownLeft, ExternalLink, Library } from 'lucide-react';
+import { AlertCircle, CornerDownLeft, ExternalLink, Library, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import type { QueryResult, SiteSummary } from '../types/domain';
@@ -47,6 +47,12 @@ export function GlobalQueryConsole({ sites }: Props) {
 
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ask();
+  }
+
+  function clearResult() {
+    setResult(null);
+    setError(null);
+    setQuestion('');
   }
 
   const scopeLabel = allSelected
@@ -120,6 +126,12 @@ export function GlobalQueryConsole({ sites }: Props) {
 
       {result && (
         <div className="answer-card">
+          <div className="answer-card__head">
+            <p className="citations-label answer-card__label">Answer</p>
+            <button className="clear-button" onClick={clearResult} title="Clear the result and reset the console">
+              <X size={14} /> Clear result
+            </button>
+          </div>
           <p className="answer-text">{result.answer}</p>
           {result.citations.length > 0 && (
             <div className="citations">
