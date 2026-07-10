@@ -32,6 +32,8 @@ export interface QueryCitation {
   url: string;
   heading: string;
   score: number;
+  /** Set on knowledge-base-wide queries to attribute the source company. */
+  company?: string;
 }
 
 export interface QueryResult {

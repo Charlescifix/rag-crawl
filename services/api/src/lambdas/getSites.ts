@@ -15,9 +15,11 @@ export const handler = async (
       sites: sites.map((s) => ({
         siteId: s.siteId,
         rootUrl: s.rootUrl,
+        domain: s.domain,
         status: s.status,
         pageCount: s.pageCount,
         chunkCount: s.chunkCount,
+        createdAt: s.createdAt,
         lastCrawledAt: s.lastCrawledAt,
       })),
     }),

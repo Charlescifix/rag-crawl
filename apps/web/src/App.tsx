@@ -1,7 +1,8 @@
-import { BrainCircuit, Globe, LayoutDashboard, MessageSquare, Workflow } from 'lucide-react';
+import { BrainCircuit, Globe, LayoutDashboard, Library, MessageSquare, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { CrawlLauncher } from './components/CrawlLauncher';
+import { GlobalQueryConsole } from './components/GlobalQueryConsole';
 import { PagesTable } from './components/PagesTable';
 import { QueryConsole } from './components/QueryConsole';
 import { SitesList } from './components/SitesList';
@@ -90,6 +91,18 @@ function App() {
     void api.getPages(siteId).then(setPages);
   }
 
+  async function handleDelete(siteId: string) {
+    await api.deleteSite(siteId);
+    const next = sites.filter((s) => s.id !== siteId);
+    setSites(next);
+    if (selectedSiteId === siteId) {
+      const fallback = next[0]?.id ?? '';
+      setSelectedSiteId(fallback);
+      setPages([]);
+      if (fallback) void api.getPages(fallback).then(setPages);
+    }
+  }
+
   if (loading) {
     return (
       <main className="loading-screen">
@@ -118,6 +131,9 @@ function App() {
           <a className="nav-item" href="#crawl" onClick={(e) => { e.preventDefault(); document.getElementById('crawl')?.scrollIntoView({ behavior: 'smooth' }); }}>
             <Globe size={17} /> Crawl
           </a>
+          <a className="nav-item" href="#kb" onClick={(e) => { e.preventDefault(); document.getElementById('kb')?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <Library size={17} /> Knowledge base
+          </a>
           <a className="nav-item" href="#query" onClick={(e) => { e.preventDefault(); document.getElementById('query')?.scrollIntoView({ behavior: 'smooth' }); }}>
             <MessageSquare size={17} /> Query
           </a>
@@ -130,9 +146,9 @@ function App() {
       <main className="main-area">
         <header className="hero" id="dashboard">
           <div>
-            <p className="eyebrow">Crawler control plane</p>
-            <h1>Turn websites into knowledge you can query.</h1>
-            <p>Crawl any public website, extract clean Markdown, and ask questions about the content with AI.</p>
+            <p className="eyebrow">Company intelligence</p>
+            <h1>Turn company websites into a knowledge base you can query.</h1>
+            <p>Crawl any company's website, then ask questions across your whole collection — benchmark against your own, spot partnership fits, and track competitors. Drop a company the moment it stops being relevant.</p>
           </div>
         </header>
 
@@ -144,7 +160,9 @@ function App() {
             sites={sites}
             selectedSiteId={selectedSiteId}
             onSelect={handleSelect}
+            onDelete={handleDelete}
           />
+          <GlobalQueryConsole sites={sites} />
           {selectedSite ? (
             <QueryConsole
               siteId={selectedSite.id}
@@ -153,7 +171,7 @@ function App() {
             />
           ) : (
             <section className="panel query-console">
-              <p className="muted-note">Add a website to start querying.</p>
+              <p className="muted-note">Add a company to start querying.</p>
             </section>
           )}
           <WorkflowTimeline />

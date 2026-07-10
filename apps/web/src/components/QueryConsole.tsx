@@ -40,7 +40,7 @@ export function QueryConsole({ siteId, siteName, siteStatus }: Props) {
     <section className="panel query-console" id="query">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Ask a question</p>
+          <p className="eyebrow">Ask one company</p>
           <h2>{siteName}</h2>
         </div>
         <span className="soft-badge"><Sparkles size={15} /> AI search</span>
@@ -51,7 +51,7 @@ export function QueryConsole({ siteId, siteName, siteStatus }: Props) {
           <AlertCircle size={16} />
           {siteStatus === 'queued' || siteStatus === 'running'
             ? 'Crawl is still in progress — querying will be available when it completes.'
-            : 'Select a completed site to query its content.'}
+            : 'Select a fully crawled company to query its content.'}
         </div>
       )}
 
@@ -62,7 +62,7 @@ export function QueryConsole({ siteId, siteName, siteStatus }: Props) {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={handleKey}
           rows={3}
-          placeholder="Ask anything about this site…"
+          placeholder="Ask anything about this company…"
           disabled={!isReady}
         />
       </div>

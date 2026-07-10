@@ -2,6 +2,8 @@ import {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createGzip, gunzipSync } from "node:zlib";
@@ -66,6 +68,44 @@ export async function presignGet(
 ): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
+
+export async function deleteS3Prefix(prefix: string): Promise<number> {
+  let deleted = 0;
+  let continuationToken: string | undefined;
+
+  do {
+    const listed = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: BUCKET,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      })
+    );
+    const keys = (listed.Contents ?? [])
+      .map((o) => o.Key)
+      .filter((k): k is string => Boolean(k));
+
+    if (keys.length > 0) {
+      await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: BUCKET,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+      deleted += keys.length;
+    }
+
+    continuationToken = listed.IsTruncated
+      ? listed.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  return deleted;
+}
+
+export function s3KeyPrefix(siteId: string): string {
+  return `sites/${siteId}/`;
 }
 
 export function s3KeyMarkdown(siteId: string, pageId: string): string {

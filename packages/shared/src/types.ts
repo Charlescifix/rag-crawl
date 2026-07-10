@@ -109,6 +109,35 @@ export interface QueryResponse {
   }>;
 }
 
+export interface GlobalQueryInput {
+  question: string;
+  topK?: number;
+  /** Restrict the search to these sites; omit to search every READY site. */
+  siteIds?: string[];
+}
+
+export interface GlobalQueryResponse {
+  answer: string;
+  /** Sites whose chunks were searched, keyed for attribution in the UI. */
+  sitesSearched: Array<{ siteId: string; domain: string }>;
+  sources: Array<{
+    chunkId: string;
+    pageId: string;
+    siteId: string;
+    domain: string;
+    url: string;
+    title?: string;
+    score: number;
+  }>;
+}
+
+export interface DeleteSiteResponse {
+  siteId: string;
+  deleted: true;
+  objectsDeleted: number;
+  itemsDeleted: number;
+}
+
 export interface FrontierItem {
   url: string;
   depth: number;

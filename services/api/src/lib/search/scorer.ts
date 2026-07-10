@@ -51,3 +51,45 @@ export function searchChunks(
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 }
+
+/**
+ * Cross-site search with a per-company quota so one large corpus can't crowd
+ * out every other company on broad questions. Each site gets at most
+ * ceil(topK / matchingSites) slots first; leftover slots are filled by global
+ * score regardless of company.
+ */
+export function searchChunksAcrossSites(
+  question: string,
+  chunks: ChunkRecord[],
+  topK = 8
+): ScoredChunk[] {
+  const scored = chunks
+    .map((chunk) => ({ chunk, score: scoreChunk(question, chunk) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const matchingSites = new Set(scored.map((s) => s.chunk.siteId)).size;
+  if (matchingSites <= 1) return scored.slice(0, topK);
+
+  const quota = Math.max(1, Math.ceil(topK / matchingSites));
+  const taken: ScoredChunk[] = [];
+  const skipped: ScoredChunk[] = [];
+  const perSite = new Map<string, number>();
+
+  for (const item of scored) {
+    const count = perSite.get(item.chunk.siteId) ?? 0;
+    if (taken.length < topK && count < quota) {
+      taken.push(item);
+      perSite.set(item.chunk.siteId, count + 1);
+    } else {
+      skipped.push(item);
+    }
+  }
+
+  for (const item of skipped) {
+    if (taken.length >= topK) break;
+    taken.push(item);
+  }
+
+  return taken.sort((a, b) => b.score - a.score);
+}

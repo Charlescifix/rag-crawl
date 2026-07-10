@@ -8,12 +8,20 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
 interface BackendSite {
   siteId: string;
   rootUrl: string;
-  domain: string;
+  domain?: string;
   status: 'QUEUED' | 'RUNNING' | 'READY' | 'FAILED';
   pageCount?: number;
   chunkCount?: number;
   lastCrawledAt?: string;
-  createdAt: string;
+  createdAt?: string;
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 interface BackendPage {
@@ -32,6 +40,20 @@ interface BackendQueryResponse {
   sources: Array<{
     chunkId: string;
     pageId: string;
+    url: string;
+    title?: string;
+    score: number;
+  }>;
+}
+
+interface BackendGlobalQueryResponse {
+  answer: string;
+  sitesSearched: Array<{ siteId: string; domain: string }>;
+  sources: Array<{
+    chunkId: string;
+    pageId: string;
+    siteId: string;
+    domain: string;
     url: string;
     title?: string;
     score: number;
@@ -58,17 +80,18 @@ const STATUS_MAP: Record<BackendSite['status'], SiteSummary['status']> = {
 
 function mapSite(s: BackendSite, jobId?: string): SiteSummary {
   const total = s.pageCount ?? 0;
+  const domain = s.domain || hostnameOf(s.rootUrl);
   return {
     id: s.siteId,
-    name: s.domain,
-    domain: s.domain,
+    name: domain,
+    domain,
     seedUrl: s.rootUrl,
     status: STATUS_MAP[s.status] ?? 'idle',
     pages: total,
     chunks: s.chunkCount ?? 0,
     markdownSizeKb: Math.round((s.chunkCount ?? 0) * 350 * 5 / 1024),
     indexedPercent: s.status === 'READY' ? 100 : s.status === 'RUNNING' ? 50 : 0,
-    lastCrawledAt: s.lastCrawledAt ?? s.createdAt,
+    lastCrawledAt: s.lastCrawledAt ?? s.createdAt ?? '',
     monthlyCostUsd: 0,
     activeJobId: jobId,
   };
@@ -124,6 +147,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
   });
   if (!res.ok) {
     const text = await res.text();
@@ -217,6 +252,39 @@ export const api = {
       topK: 6,
     });
     return mapQueryResult(data);
+  },
+
+  /** Query every READY site at once (or a subset via siteIds). */
+  queryAll: async (question: string, siteIds?: string[]): Promise<QueryResult> => {
+    if (!API_BASE) {
+      await delay();
+      return sampleQuery;
+    }
+    const data = await post<BackendGlobalQueryResponse>('/query', {
+      question,
+      topK: 8,
+      ...(siteIds && siteIds.length > 0 ? { siteIds } : {}),
+    });
+    return {
+      answer: data.answer,
+      citations: data.sources.map((s) => ({
+        pageTitle: s.title ?? s.url,
+        url: s.url,
+        heading: '',
+        score: s.score,
+        company: s.domain,
+      })),
+      latencyMs: 0,
+      modelCostUsd: 0,
+    };
+  },
+
+  deleteSite: async (siteId: string): Promise<void> => {
+    if (!API_BASE) {
+      await delay();
+      return;
+    }
+    await del<{ siteId: string; deleted: boolean }>(`/sites/${siteId}`);
   },
 
   exportMarkdown: async (siteId: string): Promise<{ url: string }> => {

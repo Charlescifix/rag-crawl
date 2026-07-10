@@ -5,6 +5,7 @@ import {
   PutCommand,
   UpdateCommand,
   QueryCommand,
+  BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type {
   SiteRecord,
@@ -135,4 +136,44 @@ export async function updateJob(
 
 export async function putQueryLog(record: QueryLogRecord): Promise<void> {
   await client.send(new PutCommand({ TableName: TABLE, Item: record }));
+}
+
+/** Delete every item in a site's partition (META, pages, jobs, query logs). */
+export async function deleteSitePartition(siteId: string): Promise<number> {
+  const pk = `SITE#${siteId}`;
+  let deleted = 0;
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+  do {
+    const res = await client.send(
+      new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: "PK = :pk",
+        ExpressionAttributeValues: { ":pk": pk },
+        ProjectionExpression: "PK, SK",
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    const keys = (res.Items ?? []) as Array<{ PK: string; SK: string }>;
+    // BatchWrite accepts at most 25 items per request
+    for (let i = 0; i < keys.length; i += 25) {
+      let requests = keys.slice(i, i + 25).map((key) => ({
+        DeleteRequest: { Key: { PK: key.PK, SK: key.SK } },
+      }));
+      while (requests.length > 0) {
+        const out = await client.send(
+          new BatchWriteCommand({ RequestItems: { [TABLE]: requests } })
+        );
+        deleted += requests.length;
+        const unprocessed = out.UnprocessedItems?.[TABLE] ?? [];
+        deleted -= unprocessed.length;
+        requests = unprocessed as typeof requests;
+      }
+    }
+
+    lastEvaluatedKey = res.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  return deleted;
 }

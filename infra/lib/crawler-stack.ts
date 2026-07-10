@@ -182,6 +182,46 @@ export class CrawlerStack extends cdk.Stack {
       })
     );
 
+    // ── queryAll Lambda (cross-site knowledge-base query) ───────────────────
+    const queryAllFn = new NodejsFunction(this, "QueryAll", {
+      ...COMMON_BUNDLE,
+      functionName: `crawler-query-all-${stage}`,
+      entry: path.join(LAMBDA_DIR, "queryAll.ts"),
+      handler: "handler",
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(90),
+      environment: commonEnv,
+    });
+    new logs.LogGroup(this, "QueryAllLogs", {
+      logGroupName: `/aws/lambda/crawler-query-all-${stage}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    queryAllFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/crawler/${stage}/anthropic_api_key`,
+        ],
+      })
+    );
+
+    // ── deleteSite Lambda ────────────────────────────────────────────────────
+    const deleteSiteFn = new NodejsFunction(this, "DeleteSite", {
+      ...COMMON_BUNDLE,
+      functionName: `crawler-delete-site-${stage}`,
+      entry: path.join(LAMBDA_DIR, "deleteSite.ts"),
+      handler: "handler",
+      memorySize: 256,
+      timeout: cdk.Duration.minutes(2),
+      environment: commonEnv,
+    });
+    new logs.LogGroup(this, "DeleteSiteLogs", {
+      logGroupName: `/aws/lambda/crawler-delete-site-${stage}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // ── exportMarkdown Lambda ────────────────────────────────────────────────
     const exportMarkdownFn = new NodejsFunction(this, "ExportMarkdown", {
       ...COMMON_BUNDLE,
@@ -279,6 +319,8 @@ export class CrawlerStack extends cdk.Stack {
       startCrawlFn,
       crawlWorkerFn,
       querySiteFn,
+      queryAllFn,
+      deleteSiteFn,
       exportMarkdownFn,
       getSitesFn,
       getSiteFn,
@@ -291,6 +333,8 @@ export class CrawlerStack extends cdk.Stack {
     table.grantReadWriteData(startCrawlFn);
     table.grantReadWriteData(crawlWorkerFn);
     table.grantReadWriteData(querySiteFn);
+    table.grantReadWriteData(queryAllFn);
+    table.grantReadWriteData(deleteSiteFn);
     table.grantReadData(exportMarkdownFn);
     table.grantReadData(getSitesFn);
     table.grantReadData(getSiteFn);
@@ -302,6 +346,8 @@ export class CrawlerStack extends cdk.Stack {
     bucket.grantReadWrite(startCrawlFn);
     bucket.grantReadWrite(crawlWorkerFn);
     bucket.grantRead(querySiteFn);
+    bucket.grantRead(queryAllFn);
+    bucket.grantReadWrite(deleteSiteFn); // delete needs List + DeleteObject
     bucket.grantReadWrite(exportMarkdownFn);
     bucket.grantRead(getMarkdownFn);
 
@@ -313,6 +359,7 @@ export class CrawlerStack extends cdk.Stack {
         allowMethods: [
           apigatewayv2.CorsHttpMethod.GET,
           apigatewayv2.CorsHttpMethod.POST,
+          apigatewayv2.CorsHttpMethod.DELETE,
           apigatewayv2.CorsHttpMethod.OPTIONS,
         ],
         allowOrigins: ["*"], // Restrict to Amplify domain in production
@@ -342,6 +389,18 @@ export class CrawlerStack extends cdk.Stack {
       path: "/sites/{siteId}",
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new HttpLambdaIntegration("GetSite", getSiteFn),
+    });
+
+    api.addRoutes({
+      path: "/sites/{siteId}",
+      methods: [apigatewayv2.HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration("DeleteSite", deleteSiteFn),
+    });
+
+    api.addRoutes({
+      path: "/query",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration("QueryAll", queryAllFn),
     });
 
     api.addRoutes({

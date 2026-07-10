@@ -378,16 +378,44 @@ button { cursor: pointer; }
 .site-list { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .site-card {
+  position: relative;
   flex: 1 1 260px;
   text-align: left;
   display: grid;
   gap: 12px;
   padding: 16px;
+  padding-right: 52px;
   color: var(--text);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   border-radius: 20px;
+  cursor: pointer;
 }
+
+.site-card--deleting { opacity: 0.45; pointer-events: none; }
+
+.site-card__delete {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-2);
+  transition: 0.15s ease;
+}
+
+.site-card__delete:hover:not(:disabled) {
+  color: var(--danger);
+  background: rgba(255, 107, 138, 0.1);
+  border-color: rgba(255, 107, 138, 0.26);
+}
+
+.site-card__delete:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .site-card--active {
   border-color: rgba(130, 247, 210, 0.42);
@@ -447,6 +475,46 @@ button { cursor: pointer; }
 }
 .citation-link:hover { background: rgba(116,167,255,0.1); }
 .citation-link strong { color: var(--text); font-weight: 600; }
+
+.citation-company {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(116, 167, 255, 0.14);
+  border: 1px solid rgba(116, 167, 255, 0.26);
+  color: var(--primary-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.scope-chip {
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: 0.15s ease;
+}
+
+.scope-chip:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.scope-chip--active {
+  color: #06110d;
+  background: var(--primary);
+  border-color: transparent;
+}
 
 .page-link { display: grid; gap: 4px; }
 .page-link strong { color: var(--text); font-weight: 600; }
