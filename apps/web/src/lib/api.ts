@@ -287,14 +287,15 @@ export const api = {
     await del<{ siteId: string; deleted: boolean }>(`/sites/${siteId}`);
   },
 
-  exportMarkdown: async (siteId: string): Promise<{ url: string }> => {
+  exportMarkdown: async (
+    siteId: string,
+    format: 'single-md' | 'zip' = 'single-md'
+  ): Promise<{ url: string }> => {
     if (!API_BASE) {
       await delay();
-      return { url: 'https://example.com/export.zip' };
+      return { url: `https://example.com/export.${format === 'zip' ? 'zip' : 'md'}` };
     }
-    const data = await post<{ downloadUrl: string }>(`/sites/${siteId}/export`, {
-      format: 'zip',
-    });
+    const data = await post<{ downloadUrl: string }>(`/sites/${siteId}/export`, { format });
     return { url: data.downloadUrl };
   },
 };

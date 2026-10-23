@@ -5,6 +5,7 @@ import {
   ListObjectsV2Command,
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createGzip, gunzipSync } from "node:zlib";
 import { Readable } from "node:stream";
@@ -62,11 +63,37 @@ export async function putS3Gzip(key: string, data: Buffer | string): Promise<voi
   );
 }
 
+// Multipart upload from a stream, so the full body never sits in memory
+export async function uploadS3Stream(
+  key: string,
+  body: Readable,
+  contentType: string,
+  tags: Record<string, string> = {}
+): Promise<void> {
+  const upload = new Upload({
+    client: s3,
+    params: { Bucket: BUCKET, Key: key, Body: body, ContentType: contentType },
+    tags: Object.entries(tags).map(([Key, Value]) => ({ Key, Value })),
+    queueSize: 4,
+    partSize: 5 * 1024 * 1024,
+  });
+  await upload.done();
+}
+
 export async function presignGet(
   key: string,
-  expiresInSeconds = 3600
+  expiresInSeconds = 3600,
+  download?: { filename: string; contentType: string }
 ): Promise<string> {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    // Force the browser to save the file rather than render it inline
+    ...(download && {
+      ResponseContentDisposition: `attachment; filename="${download.filename}"`,
+      ResponseContentType: download.contentType,
+    }),
+  });
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
 }
 

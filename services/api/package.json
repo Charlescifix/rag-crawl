@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.600.0",
     "@aws-sdk/client-ssm": "^3.600.0",
     "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-storage": "^3.1156.0",
     "@aws-sdk/s3-request-presigner": "^3.600.0",
     "@crawler/shared": "*",
     "@mozilla/readability": "^0.6.0",

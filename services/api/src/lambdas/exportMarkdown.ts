@@ -3,14 +3,18 @@ import type {
   APIGatewayProxyResultV2,
 } from "aws-lambda";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
+import { PassThrough, Readable } from "node:stream";
 import { getSite, listPages } from "../lib/storage/dynamo";
 import {
   getS3Text,
-  putS3Text,
-  putS3Gzip,
   presignGet,
   s3KeyExport,
+  uploadS3Stream,
 } from "../lib/storage/s3";
+
+// API Gateway cuts requests off at 30s, so page reads run in parallel
+const READ_CONCURRENCY = 16;
 
 export const handler = async (
   event: APIGatewayProxyEventV2
@@ -38,38 +42,54 @@ export const handler = async (
   const crawledPages = pages.filter((p) => p.status === "CRAWLED" && p.markdownKey);
 
   if (format === "single-md") {
-    const lines = [
-      `# Export for ${site.rootUrl}`,
-      ``,
-      `Generated at: ${new Date().toISOString()}`,
-      ``,
-      `---`,
-      ``,
-    ];
+    const exportKey = s3KeyExport(siteId, "single-md", timestamp);
+    const out = new PassThrough();
+    // If the upload fails mid-stream, tear down the writer so it stops waiting
+    let uploadError: unknown;
+    const upload = uploadS3Stream(
+      exportKey,
+      out,
+      "text/markdown; charset=utf-8",
+      { type: "export" }
+    ).catch((err) => {
+      uploadError = err;
+      out.destroy(err);
+    });
 
-    for (const page of crawledPages) {
-      try {
-        const markdown = await getS3Text(page.markdownKey!);
-        // Strip YAML frontmatter before embedding
-        const body = markdown.replace(/^---[\s\S]+?---\n/, "");
-        lines.push(`# Page: ${page.title ?? page.url}`);
-        lines.push(``);
-        lines.push(`Source: ${page.url}`);
-        lines.push(``);
-        lines.push(body.trim());
-        lines.push(``);
-        lines.push(`---`);
-        lines.push(``);
-      } catch {
-        // Skip unreadable pages
+    try {
+      await writeChunk(
+        out,
+        `# Export for ${site.rootUrl}\n\nGenerated at: ${new Date().toISOString()}\n\n---\n\n`
+      );
+
+      // Fetch pages with a sliding window of parallel reads, but write them
+      // in crawl order so the output is deterministic
+      const sections: Array<Promise<string | null>> = [];
+      const fetchSection = (i: number) => {
+        sections[i] ??= renderSection(crawledPages[i]);
+        return sections[i];
+      };
+
+      for (let i = 0; i < crawledPages.length; i++) {
+        for (let j = i; j < Math.min(i + READ_CONCURRENCY, crawledPages.length); j++) {
+          fetchSection(j);
+        }
+        const section = await fetchSection(i);
+        delete sections[i];
+        if (section) await writeChunk(out, section);
       }
+      out.end();
+    } catch (err) {
+      out.destroy(err as Error);
     }
 
-    const combined = lines.join("\n");
-    const exportKey = s3KeyExport(siteId, "single-md", timestamp);
-    await putS3Text(exportKey, combined);
+    await upload;
+    if (uploadError) throw uploadError;
 
-    const downloadUrl = await presignGet(exportKey, 3600);
+    const downloadUrl = await presignGet(exportKey, 3600, {
+      filename: `${siteSlug(site.rootUrl)}-${timestamp}.md`,
+      contentType: "text/markdown; charset=utf-8",
+    });
     return ok({ exportKey, downloadUrl, expiresInSeconds: 3600 });
   }
 
@@ -88,11 +108,48 @@ export const handler = async (
 
   const zipBuffer = buildZip(zipEntries);
   const exportKey = s3KeyExport(siteId, "zip", timestamp);
-  await putS3Gzip(exportKey, zipBuffer);
+  // Store the zip as-is: gzip-encoding it made browsers mis-handle the download
+  await uploadS3Stream(exportKey, Readable.from([zipBuffer]), "application/zip", {
+    type: "export",
+  });
 
-  const downloadUrl = await presignGet(exportKey, 3600);
+  const downloadUrl = await presignGet(exportKey, 3600, {
+    filename: `${siteSlug(site.rootUrl)}-${timestamp}.zip`,
+    contentType: "application/zip",
+  });
   return ok({ exportKey, downloadUrl, expiresInSeconds: 3600 });
 };
+
+async function renderSection(page: {
+  url: string;
+  title?: string;
+  markdownKey?: string;
+}): Promise<string | null> {
+  try {
+    const markdown = await getS3Text(page.markdownKey!);
+    // Strip YAML frontmatter before embedding
+    const body = markdown.replace(/^---[\s\S]+?---\n/, "");
+    return `# Page: ${page.title ?? page.url}\n\nSource: ${page.url}\n\n${body.trim()}\n\n---\n\n`;
+  } catch {
+    // Skip unreadable pages
+    return null;
+  }
+}
+
+// Respect backpressure so a slow upload doesn't buffer the whole export
+async function writeChunk(stream: PassThrough, chunk: string): Promise<void> {
+  // A destroyed stream never emits "drain", so bail out instead of hanging
+  if (stream.destroyed) throw stream.errored ?? new Error("Export stream closed");
+  if (!stream.write(chunk)) await once(stream, "drain");
+}
+
+function siteSlug(rootUrl: string): string {
+  try {
+    return new URL(rootUrl).hostname.replace(/[^a-z0-9\-.]/gi, "-").toLowerCase();
+  } catch {
+    return "export";
+  }
+}
 
 function urlToFilename(url: string): string {
   const pathname = new URL(url).pathname
